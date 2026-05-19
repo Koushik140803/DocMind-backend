@@ -31,7 +31,7 @@ def load_history(session_id: str, document_id: int) -> list[dict]:
                 Conversation.document_id == document_id
             )
             .order_by(Conversation.created_at.asc())
-            .limit(10)
+            .limit(6)
         ).all()
         return [{"role": msg.role, "content": msg.content} for msg in results]
     finally:
