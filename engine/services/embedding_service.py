@@ -1,7 +1,7 @@
 import os
 import requests
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, text
 from engine.db.database import SessionLocal
 from engine.models.chunk import Chunk
 from dotenv import load_dotenv
@@ -45,16 +45,23 @@ def embed_and_store(chunks: list[str], doc_id: int):
     finally:
         db.close()
 
-def search_similar_chunks(query: str, doc_id: int, top_k: int = 5) -> list[str]:
+
+
+def search_similar_chunks(query: str, doc_id: int, top_k: int = 5, rrf_k: int = 60) -> list[str]:
     db: Session = SessionLocal()
     try:
         query_embedding = get_embedding([query])[0]
-        results = db.scalars(
-            select(Chunk)
-            .where(Chunk.document_id == doc_id)
-            .order_by(Chunk.embedding.cosine_distance(query_embedding))
-            .limit(top_k)
-        ).all()
-        return [chunk.content for chunk in results]
+        sql = text("""
+            SELECT id, content, score
+            FROM hybrid_search(:query_text, CAST(:query_embedding AS vector), :doc_id, :top_k, :rrf_k)
+        """)
+        results = db.execute(sql, {
+            "query_text": query,
+            "query_embedding": str(query_embedding),
+            "doc_id": doc_id,
+            "top_k": top_k,
+            "rrf_k": rrf_k
+        }).fetchall()
+        return [row.content for row in results]
     finally:
         db.close()
